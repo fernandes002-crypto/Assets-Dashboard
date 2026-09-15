@@ -335,7 +335,7 @@
             state.idTokenPayload = decodeJwtPayload(response.credential);
             saveSession();
             setUserProfile(state.idTokenPayload);
-            requestSheetAccess(false);
+            attemptSilentAccess(state.idTokenPayload.email);
         } catch (error) {
             console.error(error);
             setAuthStatus("Google sign-in response could not be read.", true);
@@ -355,11 +355,11 @@
                 await loadDashboard();
             })
             .catch(error => {
+                $("grant-access").classList.remove("hidden");
                 if (silent) {
-                    $("grant-access").classList.remove("hidden");
                     setAuthStatus("Google account restored. Connect Google Sheets to continue.");
                 } else {
-                    setAuthStatus(error.message || "Google authorization failed.", true);
+                    setAuthStatus(error.message || "Google authorization failed. Click Connect Google Sheets to try again.", true);
                 }
             });
     }
@@ -381,14 +381,22 @@
     function acquireAccessToken(prompt = "none", email) {
         if (tokenRequestPromise) return tokenRequestPromise;
         tokenRequestPromise = new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (fn, value) => {
+                if (settled) return;
+                settled = true;
+                tokenRequestPromise = null;
+                clearTimeout(timeoutId);
+                fn(value);
+            };
+            const timeoutId = setTimeout(() => finish(reject, new Error("Google's sign-in popup didn't open (it may have been blocked). Please allow popups for this site and try again.")), 20000);
             const tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CONFIG.GOOGLE_CLIENT_ID,
                 scope: CONFIG.OAUTH_SCOPES,
                 callback: response => {
-                    tokenRequestPromise = null;
-                    if (response.error) { reject(new Error(`Google authorization failed: ${response.error}`)); return; }
+                    if (response.error) { finish(reject, new Error(`Google authorization failed: ${response.error}`)); return; }
                     state.accessToken = response.access_token;
-                    resolve(response.access_token);
+                    finish(resolve, response.access_token);
                 }
             });
             tokenClient.requestAccessToken({
