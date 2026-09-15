@@ -52,7 +52,7 @@
 
   function requestSheetAccess(silent){
     if(!state.idTokenPayload&&!readSavedSession()){setAuthStatus("Sign in with Google first.",true);return;}
-    acquireAccessToken(silent?"none":"consent").then(async()=>{hideLogin();await loadLogger();}).catch(e=>{if(silent){setAuthStatus("Google sign-in is ready. Connect Google Sheets to continue.");$("grant-access").classList.remove("hidden");}else setAuthStatus(e.message||"Google authorization failed.",true);});
+    acquireAccessToken(silent?"none":"consent").then(async()=>{hideLogin();await loadLogger();}).catch(e=>{$("grant-access").classList.remove("hidden");if(silent)setAuthStatus("Google sign-in is ready. Connect Google Sheets to continue.");else setAuthStatus(e.message||"Google authorization failed. Click Connect Google Sheets to try again.",true);});
   }
 
   function attemptSilentAccess(email){
