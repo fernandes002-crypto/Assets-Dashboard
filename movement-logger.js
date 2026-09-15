@@ -47,7 +47,7 @@
   }
 
   function handleCredentialResponse(response){
-    try{state.idTokenPayload=decodeJwtPayload(response.credential);saveSession();setUserProfile(state.idTokenPayload);requestSheetAccess(false);}catch(e){console.error(e);setAuthStatus("Google sign-in response could not be read.",true);}
+    try{state.idTokenPayload=decodeJwtPayload(response.credential);saveSession();setUserProfile(state.idTokenPayload);attemptSilentAccess(state.idTokenPayload.email);}catch(e){console.error(e);setAuthStatus("Google sign-in response could not be read.",true);}
   }
 
   function requestSheetAccess(silent){
@@ -62,7 +62,10 @@
   function acquireAccessToken(prompt="none",email){
     if(tokenRequestPromise)return tokenRequestPromise;
     tokenRequestPromise=new Promise((resolve,reject)=>{
-      const tokenClient=google.accounts.oauth2.initTokenClient({client_id:CONFIG.GOOGLE_CLIENT_ID,scope:CONFIG.OAUTH_SCOPES,callback:response=>{tokenRequestPromise=null;if(response.error){reject(new Error(`Google authorization failed: ${response.error}`));return;}state.accessToken=response.access_token;resolve(response.access_token);}});
+      let settled=false;
+      const finish=(fn,value)=>{if(settled)return;settled=true;tokenRequestPromise=null;clearTimeout(timeoutId);fn(value);};
+      const timeoutId=setTimeout(()=>finish(reject,new Error("Google's sign-in popup didn't open (it may have been blocked). Please allow popups for this site and try again.")),20000);
+      const tokenClient=google.accounts.oauth2.initTokenClient({client_id:CONFIG.GOOGLE_CLIENT_ID,scope:CONFIG.OAUTH_SCOPES,callback:response=>{if(response.error){finish(reject,new Error(`Google authorization failed: ${response.error}`));return;}state.accessToken=response.access_token;finish(resolve,response.access_token);}});
       tokenClient.requestAccessToken({prompt,login_hint:email||state.idTokenPayload?.email||readSavedSession()?.email||undefined});
     });
     return tokenRequestPromise;
